@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger the price check URL
-        run: curl https://your-app-name.onrender.com/trigger-check
+        run: curl https://my-stock-alerter.onrender.com
