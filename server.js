@@ -1,8 +1,10 @@
-// Load environment variables for security
+// UPDATED server.js
+
 require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
-const cron = require('node-cron');
+// We no longer need node-cron in this file
+// const cron = require('node-cron'); 
 const path = require('path');
 
 // --- CONFIGURATION ---
@@ -13,12 +15,11 @@ const CHAT_ID = process.env.CHAT_ID;
 const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_KEY;
 
 // --- IN-MEMORY DATABASE ---
-// A simple array to store alerts. This will reset if the server restarts.
 let alerts = [];
 
 // --- MIDDLEWARE ---
-app.use(express.json()); // To parse JSON from the frontend
-app.use(express.static(path.join(__dirname, 'public'))); // To serve the HTML file
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- API ENDPOINT TO SET AN ALERT ---
 app.post('/set-alert', (req, res) => {
@@ -27,7 +28,7 @@ app.post('/set-alert', (req, res) => {
         return res.status(400).json({ message: 'Stock symbol and target price are required.' });
     }
     const newAlert = {
-        id: Date.now(), // a unique ID for the alert
+        id: Date.now(),
         symbol: stockSymbol.toUpperCase(),
         target: parseFloat(targetPrice),
         status: 'active'
@@ -37,36 +38,38 @@ app.post('/set-alert', (req, res) => {
     res.status(201).json({ message: `Alert set for ${newAlert.symbol} at ₹${newAlert.target}` });
 });
 
+// --- NEW ENDPOINT FOR THE CRON JOB TO CALL ---
+app.get('/trigger-check', (req, res) => {
+    console.log('Received request from external Cron Job.');
+    checkPrices(); // Run the price check function
+    res.status(200).json({ message: 'Price check triggered successfully.' });
+});
+
 // --- HELPER FUNCTIONS ---
 async function checkPrices() {
     if (alerts.length === 0) {
-        console.log('No active alerts to check.');
+        console.log('Cron Job Ran: No active alerts to check.');
         return;
     }
-    console.log(`Checking prices for ${alerts.length} active alert(s)...`);
+    console.log(`Cron Job Ran: Checking prices for ${alerts.length} active alert(s)...`);
 
     for (let i = alerts.length - 1; i >= 0; i--) {
         const alert = alerts[i];
         const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${alert.symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
-
         try {
             const response = await fetch(url);
             const data = await response.json();
             const quote = data['Global Quote'];
-
             if (!quote || Object.keys(quote).length === 0) {
-                console.warn(`Could not fetch data for ${alert.symbol}. It might be an invalid symbol.`);
-                continue; // Skip to the next alert
+                console.warn(`Could not fetch data for ${alert.symbol}.`);
+                continue;
             }
-
             const currentPrice = parseFloat(quote['05. price']);
             console.log(`Checked ${alert.symbol}: Current Price is ₹${currentPrice}, Target is ₹${alert.target}`);
-
             if (currentPrice >= alert.target) {
                 console.log(`TRIGGERED: ${alert.symbol}`);
                 const message = `📈 **Stock Alert** 📈\n\n**${alert.symbol}** has reached your target price!\n\nTarget: ₹${alert.target}\nCurrent: ₹${currentPrice}`;
                 await sendTelegramMessage(message);
-                // Remove the alert from the array so it doesn't trigger again
                 alerts.splice(i, 1);
             }
         } catch (error) {
@@ -77,17 +80,9 @@ async function checkPrices() {
 
 async function sendTelegramMessage(text) {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-    const body = {
-        chat_id: CHAT_ID,
-        text: text,
-        parse_mode: 'Markdown'
-    };
+    const body = { chat_id: CHAT_ID, text: text, parse_mode: 'Markdown' };
     try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        });
+        const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const result = await response.json();
         if (result.ok) {
             console.log('Telegram message sent successfully!');
@@ -99,13 +94,10 @@ async function sendTelegramMessage(text) {
     }
 }
 
-// --- SCHEDULED TASK (CRON JOB) ---
-// Runs every 2 minutes. You can adjust the schedule. '*/2 * * * *'
-// Note: The free Alpha Vantage API has limits, so don't run this too frequently.
-cron.schedule('*/2 * * * *', checkPrices);
+// --- REMOVED THE OLD SCHEDULE ---
+// We removed the cron.schedule() line from here.
 
 // --- START THE SERVER ---
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    console.log('Stock alerter is active. Waiting for alerts to be set.');
 });
