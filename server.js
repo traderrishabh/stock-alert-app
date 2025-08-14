@@ -1,10 +1,8 @@
-// UPDATED server.js
+// FINAL server.js using Yahoo Finance
 
 require('dotenv').config();
 const express = require('express');
 const fetch = require('node-fetch');
-// We no longer need node-cron in this file
-// const cron = require('node-cron'); 
 const path = require('path');
 
 // --- CONFIGURATION ---
@@ -12,7 +10,8 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
-const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_KEY;
+// We no longer need an API key for Yahoo Finance
+// const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_KEY;
 
 // --- IN-MEMORY DATABASE ---
 let alerts = [];
@@ -38,10 +37,10 @@ app.post('/set-alert', (req, res) => {
     res.status(201).json({ message: `Alert set for ${newAlert.symbol} at ₹${newAlert.target}` });
 });
 
-// --- NEW ENDPOINT FOR THE CRON JOB TO CALL ---
+// --- ENDPOINT FOR THE CRON JOB TO CALL ---
 app.get('/trigger-check', (req, res) => {
     console.log('Received request from external Cron Job.');
-    checkPrices(); // Run the price check function
+    checkPrices();
     res.status(200).json({ message: 'Price check triggered successfully.' });
 });
 
@@ -55,17 +54,24 @@ async function checkPrices() {
 
     for (let i = alerts.length - 1; i >= 0; i--) {
         const alert = alerts[i];
-        const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${alert.symbol}&apikey=${ALPHA_VANTAGE_KEY}`;
+        // This URL is now for Yahoo Finance
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${alert.symbol}`;
+        
         try {
-            const response = await fetch(url);
+            const response = await fetch(url, { headers: {'User-Agent': 'Mozilla/5.0'} });
             const data = await response.json();
-            const quote = data['Global Quote'];
-            if (!quote || Object.keys(quote).length === 0) {
-                console.warn(`Could not fetch data for ${alert.symbol}.`);
+            
+            // This is the new way to get the price from Yahoo's data structure
+            const quote = data?.quoteResponse?.result?.[0];
+
+            if (!quote) {
+                console.warn(`No data returned from Yahoo Finance for ${alert.symbol}.`);
                 continue;
             }
-            const currentPrice = parseFloat(quote['05. price']);
+
+            const currentPrice = quote.regularMarketPrice;
             console.log(`Checked ${alert.symbol}: Current Price is ₹${currentPrice}, Target is ₹${alert.target}`);
+
             if (currentPrice >= alert.target) {
                 console.log(`TRIGGERED: ${alert.symbol}`);
                 const message = `📈 **Stock Alert** 📈\n\n**${alert.symbol}** has reached your target price!\n\nTarget: ₹${alert.target}\nCurrent: ₹${currentPrice}`;
@@ -93,9 +99,6 @@ async function sendTelegramMessage(text) {
         console.error('Error sending Telegram message:', error);
     }
 }
-
-// --- REMOVED THE OLD SCHEDULE ---
-// We removed the cron.schedule() line from here.
 
 // --- START THE SERVER ---
 app.listen(PORT, () => {
