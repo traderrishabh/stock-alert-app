@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Alert Setter</title>
+    <style>
+        body { background-color: #f4f7f6; color: #333; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .container { background-color: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 1.5rem; }
+        label { display: block; margin-bottom: 0.5rem; font-weight: 600; }
+        input { width: 100%; padding: 12px; margin-bottom: 1rem; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 1rem; }
+        button { width: 100%; padding: 14px; background-color: #27ae60; color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #229954; }
+        .status { text-align: center; margin-top: 1rem; font-weight: 500; min-height: 20px; }
+        .status.success { color: #27ae60; }
+        .status.error { color: #c0392b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Set a Stock Alert</h1>
+        <form id="alertForm">
+            <label for="stockSymbol">Stock Symbol (e.g., RELIANCE.NS)</label>
+            <input type="text" id="stockSymbol" required placeholder="TCS.NS">
+
+            <label for="targetPrice">Target Price (₹)</label>
+            <input type="number" id="targetPrice" step="0.01" required placeholder="4000">
+
+            <button type="submit">Set Alert</button>
+        </form>
+        <p id="status" class="status"></p>
+    </div>
+
+    <script>
+        const form = document.getElementById('alertForm');
+        const statusEl = document.getElementById('status');
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault(); // Prevent page reload
+            const stockSymbol = document.getElementById('stockSymbol').value;
+            const targetPrice = document.getElementById('targetPrice').value;
+
+            statusEl.textContent = 'Setting alert...';
+            statusEl.className = 'status';
+
+            try {
+                const response = await fetch('/set-alert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stockSymbol, targetPrice })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    statusEl.textContent = result.message;
+                    statusEl.className = 'status success';
+                    form.reset();
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                statusEl.textContent = 'Error: ' + error.message;
+                statusEl.className = 'status error';
+            }
+        });
+    </script>
+</body>
+</html>
